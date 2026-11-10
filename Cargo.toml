@@ -1,0 +1,19 @@
+[package]
+name = "candle-maker"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.83"
+description = "Minimal batched RGB candlestick renderer for Python"
+
+[lib]
+name = "_native"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+numpy = "0.29"
+pyo3 = "0.29"
+rayon = "1.11"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
