@@ -67,13 +67,36 @@ C-contiguous RGB: black `(0, 0, 0)`, green `(0, 255, 0)` for `close >= open`,
 and red `(255, 0, 0)` otherwise. Each sample scales independently using its
 lowest low and highest high, with approximately 5% vertical padding.
 
+Both functions also accept a **list of candle dictionaries** for one trajectory,
+or a nested list for a batch with the same number of candles per sample:
+
+```python
+from datetime import datetime
+
+candles = [
+    {"open": 10, "high": 14, "low": 9, "close": 13, "time": datetime(2024, 1, 1, 9, 30)},
+    {"open": 13, "high": 15, "low": 10, "close": 11, "time": datetime(2024, 1, 1, 10, 30)},
+]
+dated_images = render(candles, height=256, width=512, use_axis=True)
+dated_out = np.empty_like(dated_images)
+render_into(candles, dated_out, use_axis=True)
+```
+
+`open`, `high`, `low`, and `close` are required numeric keys; extra keys are
+ignored. Optional `time` must be a Python `datetime`, supplied for all or no
+candles within each sample. With axes enabled, timestamps produce date/time
+labels; without them, labels remain candle indices. Naive datetimes display as
+supplied; aware datetimes display in UTC. Input order and equal candle spacing
+are preserved. See [datetime rules and input benchmarks](docs/dictionary-input.md).
+
 Both functions default to **`use_axis=False`**, preserving the original pixels.
 Set **`use_axis=True`** for gray price ticks on the left and zero-based candle
-indices along the bottom. OHLC input contains no timestamps, so these are not
-date labels. The Rust engine draws a built-in 5x7 bitmap font; no font files or
+indices along the bottom, or date/time labels for timestamped dictionaries.
+The Rust engine draws a built-in 5x7 bitmap font; no font files or
 extra Python packages are needed. Labels use compact decimal/scientific notation.
 Axis mode requires **H >= 64, W >= 112** and reserves 64/8/8/22 pixels for
-left/right/top/bottom margins within the requested image dimensions. The entire
+left/right/top/bottom margins (32 bottom pixels for date/time labels) within the
+requested image dimensions. The entire
 trajectory fits in the remaining plot area; small images have denser candles.
 
 Values must be finite and satisfy `low <= open/close <= high`. At least one
@@ -100,11 +123,15 @@ And with `use_axis=True`:
 
 ![Rust and mplfinance renders with price and candle-index axes](docs/assets/mplfinance-comparison-axes.png)
 
+Timestamped dictionaries use date/time labels instead:
+
+![Rust and mplfinance renders with datetime axes](docs/assets/mplfinance-comparison-datetime.png)
+
 Left: candle-maker. Center: mplfinance with fresh figures. Right: mplfinance
 with a reused figure/canvas. Appearance is closely matched; the renderers
 are **not pixel-identical**, including differences in font and tick rasterization.
 
-Measured throughput in **images/second**, batch size 256, median of five rounds:
+Earlier array-only throughput in **images/second**, batch size 256, median of five rounds:
 
 | Axes | Image H x W | Output mode | mplfinance | candle-maker | Speedup |
 | --- | --- | --- | ---: | ---: | ---: |
@@ -128,6 +155,23 @@ These numbers describe this OHLC-to-RGB pipeline, not general Rust/Python
 performance or training speed. Imports, data preparation, PNG encoding, and
 disk I/O are excluded. Hardware, resolution, and batch size affect throughput.
 See [benchmark details, versions, and raw timings](docs/benchmarks/README.md).
+
+Current input-format comparison, **axes on and output reused**, with the same
+256 samples, 64 candles, batch size 256, and five-round medians:
+
+| Input | Image H x W | mplfinance/s | candle-maker/s | Speedup |
+| --- | --- | ---: | ---: | ---: |
+| NumPy | 128 x 128 | 64.2 | 353,030 | 5,499x |
+| NumPy | 256 x 512 | 50.9 | 40,490 | 795x |
+| Dictionaries | 128 x 128 | 60.1 | 5,867 | 98x |
+| Dictionaries | 256 x 512 | 49.7 | 5,124 | 103x |
+| Dictionaries + datetime | 128 x 128 | 57.1 | 5,158 | 90x |
+| Dictionaries + datetime | 256 x 512 | 34.7 | 4,245 | 122x |
+
+Dictionary timings include validation and conversion on every call in both
+engines; records are constructed before timing. The array control uses prebuilt
+DataFrames. Numeric arrays remain the fast path.
+[Full fresh/reused results and method](docs/dictionary-input.md).
 
 ## Where the speed comes from
 
@@ -164,11 +208,15 @@ For the mplfinance comparison:
 python -m pip install ".[benchmark]"
 python examples/benchmark_mplfinance.py --csv path/to/prices.csv
 python examples/benchmark_mplfinance.py --csv path/to/prices.csv --use-axis
+python examples/benchmark_mplfinance.py --csv path/to/prices.csv --use-axis --input-format dict-time
 ```
 
 The comparison CSV needs a header, then timestamp/open/high/low/close as its
 first five columns. Both engines receive the same axis setting. Results and
 previews go to ignored `output/mplfinance_comparison/` or `output/mplfinance_axes/`.
+`--input-format dict` benchmarks dictionaries without timestamps; `dict-time`
+uses ISO-format timestamps from the CSV's first column. Dictionary modes time
+input conversion in both engines and use separate output directories.
 Use `--rayon-threads 1 --engines rust rust_reuse` for the single-worker control.
 `examples/benchmark_batch_sizes.py` sweeps batch sizes and supports `--reuse-output`.
 `examples/render_csv.py path/to/prices.csv --use-axis` saves PNG previews (requires lowercase

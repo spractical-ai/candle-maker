@@ -1,4 +1,4 @@
-use crate::axis::{self, Plot};
+use crate::axis::{self, Plot, TimeTicks};
 use rayon::prelude::*;
 use std::alloc::{alloc_zeroed, Layout};
 use std::cell::RefCell;
@@ -47,19 +47,44 @@ pub enum RenderError {
     Allocation(String),
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct RenderOptions<'a> {
+    pub use_axis: bool,
+    pub time_labels: Option<&'a [Option<TimeTicks>]>,
+}
+
+struct RenderLayout<'a> {
+    plot: Plot,
+    width: usize,
+    time_labels: Option<&'a [Option<TimeTicks>]>,
+}
+
 pub fn render(
     data: &[f64],
     batch: usize,
     candles: usize,
     height: usize,
     width: usize,
-    use_axis: bool,
+    options: RenderOptions<'_>,
 ) -> Result<Vec<u8>, RenderError> {
     let (sample_len, image_len, total_len) = validate(data, batch, candles, height, width)?;
-    let plot = Plot::new(height, width, use_axis)
+    let plot = Plot::new(height, width, options.use_axis)
+        .map_err(|message| RenderError::Invalid(message.into()))?;
+    axis::validate_time_labels(options.time_labels, batch, candles, options.use_axis)
         .map_err(|message| RenderError::Invalid(message.into()))?;
     let mut output = zeroed_buffer(total_len)?;
-    draw_batch(&mut output, data, sample_len, image_len, plot, width, false);
+    draw_batch(
+        &mut output,
+        data,
+        sample_len,
+        image_len,
+        RenderLayout {
+            plot,
+            width,
+            time_labels: options.time_labels,
+        },
+        false,
+    );
     Ok(output)
 }
 
@@ -70,18 +95,31 @@ pub fn render_into(
     height: usize,
     width: usize,
     output: &mut [u8],
-    use_axis: bool,
+    options: RenderOptions<'_>,
 ) -> Result<(), RenderError> {
     // Validate everything before modifying caller-owned output.
     let (sample_len, image_len, total_len) = validate(data, batch, candles, height, width)?;
-    let plot = Plot::new(height, width, use_axis)
+    let plot = Plot::new(height, width, options.use_axis)
+        .map_err(|message| RenderError::Invalid(message.into()))?;
+    axis::validate_time_labels(options.time_labels, batch, candles, options.use_axis)
         .map_err(|message| RenderError::Invalid(message.into()))?;
     if output.len() != total_len {
         return Err(RenderError::Invalid(
             "output size does not match image batch".into(),
         ));
     }
-    draw_batch(output, data, sample_len, image_len, plot, width, true);
+    draw_batch(
+        output,
+        data,
+        sample_len,
+        image_len,
+        RenderLayout {
+            plot,
+            width,
+            time_labels: options.time_labels,
+        },
+        true,
+    );
     Ok(())
 }
 
@@ -168,28 +206,40 @@ fn draw_batch(
     data: &[f64],
     sample_len: usize,
     image_len: usize,
-    plot: Plot,
-    width: usize,
+    layout: RenderLayout<'_>,
     clear: bool,
 ) {
+    let RenderLayout {
+        plot,
+        width,
+        time_labels,
+    } = layout;
     let candles = sample_len / 4;
     let mut process = |positions: Option<&[CandleX]>| {
-        let draw = |(image, sample): (&mut [u8], &[f64])| {
+        let draw = |(index, (image, sample)): (usize, (&mut [u8], &[f64]))| {
             if clear {
                 image.fill(0);
             }
-            draw_chart(image, sample, plot, width, positions);
+            let ticks = time_labels.and_then(|labels| labels[index].as_ref());
+            let sample_plot = if ticks.is_some() {
+                plot.with_time_labels()
+            } else {
+                plot
+            };
+            draw_chart(image, sample, sample_plot, width, positions, ticks);
         };
         let batch = output.len() / image_len;
         if batch == 1 || (batch <= 8 && image_len <= 64 * 1024) {
             output
                 .chunks_mut(image_len)
                 .zip(data.chunks(sample_len))
+                .enumerate()
                 .for_each(draw);
         } else {
             output
                 .par_chunks_mut(image_len)
                 .zip(data.par_chunks(sample_len))
+                .enumerate()
                 .with_min_len(4)
                 .for_each(draw);
         }
@@ -222,6 +272,7 @@ fn draw_chart(
     plot: Plot,
     width: usize,
     positions: Option<&[CandleX]>,
+    time_ticks: Option<&TimeTicks>,
 ) {
     let low = sample
         .chunks_exact(4)
@@ -268,7 +319,7 @@ fn draw_chart(
         }
     }
     if plot.x != 0 {
-        axis::draw(image, width, plot, low, high, sample.len() / 4);
+        axis::draw(image, width, plot, low, high, sample.len() / 4, time_ticks);
     }
 }
 
@@ -279,7 +330,7 @@ mod tests {
     #[test]
     fn overflow_is_rejected_before_allocating() {
         assert!(matches!(
-            render(&[1.0; 4], 1, 1, usize::MAX, 2, false),
+            render(&[1.0; 4], 1, 1, usize::MAX, 2, RenderOptions::default()),
             Err(RenderError::Invalid(_))
         ));
     }
@@ -287,7 +338,7 @@ mod tests {
     #[test]
     fn shape_mismatch_is_rejected() {
         assert!(matches!(
-            render(&[1.0; 4], 2, 1, 8, 8, false),
+            render(&[1.0; 4], 2, 1, 8, 8, RenderOptions::default()),
             Err(RenderError::Invalid(_))
         ));
     }
@@ -295,12 +346,21 @@ mod tests {
     #[test]
     fn invalid_input_does_not_modify_reused_output() {
         let mut output = vec![123; 8 * 8 * 3];
-        assert!(render_into(&[2.0, 1.0, 0.0, 2.0], 1, 1, 8, 8, &mut output, false).is_err());
+        assert!(render_into(
+            &[2.0, 1.0, 0.0, 2.0],
+            1,
+            1,
+            8,
+            8,
+            &mut output,
+            RenderOptions::default()
+        )
+        .is_err());
         assert!(output.iter().all(|&pixel| pixel == 123));
     }
 
     #[test]
     fn output_size_mismatch_is_rejected() {
-        assert!(render_into(&[1.0; 4], 1, 1, 8, 8, &mut [0; 8], false).is_err());
+        assert!(render_into(&[1.0; 4], 1, 1, 8, 8, &mut [0; 8], RenderOptions::default()).is_err());
     }
 }

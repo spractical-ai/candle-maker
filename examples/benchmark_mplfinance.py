@@ -8,6 +8,7 @@ import json
 import os
 import platform
 import random
+from datetime import datetime, timezone
 from pathlib import Path
 from statistics import median
 from time import perf_counter
@@ -21,7 +22,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.collections import LineCollection, PolyCollection
 from matplotlib.figure import Figure
-from matplotlib.transforms import Bbox
+from matplotlib.transforms import Bbox, ScaledTranslation
 import mplfinance as mpf
 import numpy as np
 import pandas as pd
@@ -59,9 +60,28 @@ def format_price(value):
     return label
 
 
+def datetime_ticks(values, width):
+    microseconds = any(value.microsecond for value in values)
+    seconds = microseconds or any(value.second for value in values)
+    label_width = max(10, 15 if microseconds else 8 if seconds else 5) * 6 - 1
+    count = min(5, max(1, (width - 72) // (label_width + 12) + 1), len(values))
+    indices = [(len(values) - 1) // 2] if count == 1 else [(len(values) - 1) * i // (count - 1) for i in range(count)]
+    labels = []
+    for index in indices:
+        value = values[index]
+        label = f"{value.year:04d}-{value.month:02d}-{value.day:02d}\n{value.hour:02d}:{value.minute:02d}"
+        if seconds:
+            label += f":{value.second:02d}"
+        if microseconds:
+            label += f".{value.microsecond:06d}"
+        labels.append(label)
+    return indices, labels
+
+
 class MpfRenderer:
-    def __init__(self, height, width, reuse, use_axis=False):
+    def __init__(self, height, width, reuse, use_axis=False, date_axis=False):
         self.height, self.width, self.reuse, self.use_axis = height, width, reuse, use_axis
+        self.date_axis = date_axis and use_axis
         self.figure = self.axis = self.canvas = None
         if reuse:
             self.figure = Figure(figsize=(width / DPI, height / DPI), dpi=DPI, facecolor="black")
@@ -69,9 +89,21 @@ class MpfRenderer:
             self.axis = self.figure.add_axes([0, 0, 1, 1], facecolor="black")
 
     def draw(self, frame, colors, out):
+        if isinstance(frame, list):
+            # Dictionary adapters are timed for both libraries. The default
+            # array benchmark retains its prebuilt DataFrames for compatibility.
+            frame = pd.DataFrame.from_records(frame)
+            if "time" in frame:
+                frame.index = pd.DatetimeIndex(frame.pop("time"))
+                if frame.index.tz is not None:
+                    frame.index = frame.index.tz_convert("UTC")
+            else:
+                frame.index = pd.date_range("2000-01-01", periods=len(frame), freq="h")
+            frame = frame.rename(columns={name: name.title() for name in ["open", "high", "low", "close"]})
         candles = len(frame)
         low, high = frame["Low"].min(), frame["High"].max()
-        plot_height = self.height - 30 if self.use_axis else self.height
+        bottom = 32 if self.date_axis else 22
+        plot_height = self.height - 8 - bottom if self.use_axis else self.height
         plot_width = self.width - 72 if self.use_axis else self.width
         padding = min(int(plot_height * 0.05), (plot_height - 1) // 2)
         span = plot_height - 1 - 2 * padding
@@ -112,7 +144,7 @@ class MpfRenderer:
             axis.set_ylim(*ylim)
             if self.use_axis:
                 axis.set_axis_on()
-                axis.set_position([64 / self.width, 22 / self.height,
+                axis.set_position([64 / self.width, bottom / self.height,
                                    plot_width / self.width, plot_height / self.height])
                 axis.set_xlabel("")
                 axis.set_ylabel("")
@@ -125,7 +157,10 @@ class MpfRenderer:
                     spine.set_antialiased(False)
                 count = min(5, max(2, plot_width // 48 + 1), candles)
                 indices = [0] if count == 1 else [(candles - 1) * i // (count - 1) for i in range(count)]
-                axis.set_xticks(indices, [str(index) for index in indices])
+                labels = [str(index) for index in indices]
+                if self.date_axis:
+                    indices, labels = datetime_ticks(frame.index, self.width)
+                axis.set_xticks(indices, labels)
                 count = 1 if low == high else min(5, max(2, plot_height // 24 + 1))
                 values = [low] if count == 1 else [high * (1 - i / (count - 1)) + low * (i / (count - 1)) for i in range(count)]
                 axis.set_yticks(values, [format_price(value) for value in values])
@@ -138,6 +173,14 @@ class MpfRenderer:
                     label.set_antialiased(False)
                 for line in [*axis.get_xticklines(), *axis.get_yticklines()]:
                     line.set_antialiased(False)
+                if self.date_axis:
+                    for index, label in zip(indices, axis.get_xticklabels()):
+                        label.set_linespacing(1.4)
+                        center = 64 + (index + .5) * plot_width / candles
+                        half = (max(map(len, label.get_text().splitlines())) * 6 - 1) / 2
+                        shift = max(0, half - center) + min(0, self.width - half - center)
+                        transform = axis.get_xaxis_text1_transform(3 * 72 / DPI)[0]
+                        label.set_transform(transform + ScaledTranslation(shift / DPI, 0, figure.dpi_scale_trans))
             for collection in axis.collections:
                 collection.set_antialiased(False)
                 if isinstance(collection, LineCollection):
@@ -188,12 +231,12 @@ def measure(engine, data, frames, colors, batch, height, width, renderer, passes
             "mean_batch_ms": elapsed * 1000 / (len(chunks) * passes)}
 
 
-def preview(data, frames, colors, height, width, output, use_axis=False):
+def preview(data, frames, colors, height, width, output, use_axis=False, date_axis=False):
     rust_image = render(data[:1], height, width, use_axis=use_axis)[0]
     fresh = np.empty_like(rust_image)
     reused = np.empty_like(rust_image)
-    MpfRenderer(height, width, False, use_axis).draw(frames[0], colors[0], fresh)
-    reused_renderer = MpfRenderer(height, width, True, use_axis)
+    MpfRenderer(height, width, False, use_axis, date_axis).draw(frames[0], colors[0], fresh)
+    reused_renderer = MpfRenderer(height, width, True, use_axis, date_axis)
     # Verify that changing prices/labels and then reusing the canvas does not
     # retain old artists. This check and preview saving are outside timing.
     reused_renderer.draw(frames[-1], colors[-1], reused)
@@ -258,11 +301,14 @@ def main():
     parser.add_argument("--engines", choices=ENGINES, nargs="+", default=ENGINES)
     parser.add_argument("--rayon-threads", type=int)
     parser.add_argument("--use-axis", action="store_true", help="draw matched price/index axes in both engines")
+    parser.add_argument("--input-format", choices=["array", "dict", "dict-time"], default="array",
+                        help="dict modes include input normalization in both engines' timed pipelines")
     parser.add_argument("--csv", type=Path, default=ROOT / "sample_data/BTCUSDT-1h.csv")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     if args.output is None:
-        args.output = ROOT / ("output/mplfinance_axes" if args.use_axis else "output/mplfinance_comparison")
+        name = "mplfinance_axes" if args.use_axis else "mplfinance_comparison"
+        args.output = ROOT / "output" / (name if args.input_format == "array" else name + "_" + args.input_format)
     if min(args.samples, args.candles, args.rounds, args.rust_passes, *args.batches) < 1:
         parser.error("sizes and repeat counts must be positive")
     if any(args.samples % b for b in args.batches):
@@ -272,11 +318,29 @@ def main():
             parser.error("rayon-threads must be positive")
         os.environ["RAYON_NUM_THREADS"] = str(args.rayon_threads)
     args.output.mkdir(parents=True, exist_ok=True)
-    data, csv_rows = load_windows(args.csv, args.candles, args.samples)
+    prices, csv_rows = load_windows(args.csv, args.candles, args.samples)
+    data = prices
     dates = pd.date_range("2000-01-01", periods=args.candles, freq="h")
     # Input adapters and static styles are prepared once, outside timed regions.
     frames = [pd.DataFrame(sample, columns=["Open", "High", "Low", "Close"], index=dates) for sample in data]
     colors = [["#00ff00" if close >= open_ else "#ff0000" for open_, _, _, close in sample] for sample in data]
+    time_hash = None
+    if args.input_format != "array":
+        data = [[dict(zip(["open", "high", "low", "close"], map(float, candle))) for candle in sample] for sample in prices]
+        if args.input_format == "dict-time":
+            with args.csv.open(newline="", encoding="utf-8-sig") as stream:
+                reader = csv.reader(stream)
+                next(reader)
+                all_times = [datetime.fromisoformat(row[0]) for row in reader]
+            all_times = [value.astimezone(timezone.utc) if value.utcoffset() is not None else value for value in all_times]
+            starts = np.linspace(0, csv_rows - args.candles, args.samples, dtype=np.intp)
+            selected = [all_times[start:start + args.candles] for start in starts]
+            for sample, times in zip(data, selected):
+                for candle, value in zip(sample, times):
+                    candle["time"] = value
+            time_hash = hashlib.sha256("\n".join(value.isoformat() for times in selected for value in times).encode()).hexdigest()
+        frames = data
+    date_axis = args.input_format == "dict-time" and args.use_axis
     resolutions = [(128, 128), (256, 512)]
     metadata = {
         "python": platform.python_version(), "platform": platform.platform(),
@@ -285,21 +349,24 @@ def main():
         "matplotlib": matplotlib.__version__, "mplfinance": mpf.__version__,
         "backend": matplotlib.get_backend(), "native_sha256": hashlib.sha256(Path(_native.__file__).read_bytes()).hexdigest(),
         "samples": args.samples, "candles": args.candles, "csv_rows": csv_rows,
-        "input_sha256": hashlib.sha256(data.tobytes()).hexdigest(),
+        "input_sha256": hashlib.sha256(prices.tobytes()).hexdigest(),
+        "time_sha256": time_hash, "input_format": args.input_format,
+        "python_wrapper_sha256": hashlib.sha256(Path(render.__code__.co_filename).read_bytes()).hexdigest(),
+        "input_adapters": "prebuilt numeric arrays and pandas DataFrames" if args.input_format == "array" else "records created outside timing; OHLC/datetime validation, NumPy conversion, tick formatting, and dictionary-to-DataFrame/DatetimeIndex conversion are timed",
         "rounds": args.rounds, "rust_passes": args.rust_passes,
         "use_axis": args.use_axis,
         "scope": "real RGB batches, including canvas.draw(), RGBA-to-RGB copy, and normal figure close; automatic GC enabled",
-        "excluded": "imports, CSV reading, window selection, DataFrame/DatetimeIndex/color/style preparation, preview saving, PNG encoding, disk writes, forced GC between configurations",
+        "excluded": ("imports, CSV reading, window selection, DataFrame/DatetimeIndex/color/style preparation, preview saving, PNG encoding, disk writes, forced GC between configurations" if args.input_format == "array" else "imports, CSV reading, window selection, initial record construction, color/style preparation, preview saving, PNG encoding, disk writes, forced GC between configurations"),
         "fresh": "both engines allocate independent B,H,W,3 outputs per call; mplfinance makes/closes a figure per image",
         "reuse": "both engines reuse output; mplfinance also reuses its figure, external axes, and Agg canvas; only old candle collections are removed before replotting",
         "threads": "Rust uses configured Rayon pool; mplfinance runs in one process without a multiprocessing wrapper",
         "rust_repetitions": f"Rust repeats the identical {args.samples}-window corpus more times per round for stable timing; throughput is normalized by charts actually rendered",
         "appearance": "black, pure green/red, antialiasing disabled, no grid/volume, 70% candle bodies, one-pixel wicks, matching x/price limits and vertical padding",
-        "axes": "gray left price and bottom zero-based candle-index ticks; matching tick values/counts, 64/8/8/22-pixel left/right/top/bottom margins; Rust 5x7 bitmap font vs Matplotlib 6pt DejaVu Sans Mono" if args.use_axis else "no axes or labels",
+        "axes": ("gray left price and two-line date/time ticks; matching tick values/counts; 64/8/8/32-pixel left/right/top/bottom margins" if date_axis else "gray left price and bottom zero-based candle-index ticks; matching tick values/counts, 64/8/8/22-pixel left/right/top/bottom margins; Rust 5x7 bitmap font vs Matplotlib 6pt DejaVu Sans Mono") if args.use_axis else "no axes or labels",
         "rasterization": "same requested appearance and exact output dimensions; Matplotlib and Rust need not produce bit-identical pixels",
     }
-    visual = {f"{h}x{w}": preview(data, frames, colors, h, w, args.output, args.use_axis) for h, w in resolutions}
-    renderers = {(h, w, engine): MpfRenderer(h, w, engine.endswith("_reuse"), args.use_axis)
+    visual = {f"{h}x{w}": preview(data, frames, colors, h, w, args.output, args.use_axis, date_axis) for h, w in resolutions}
+    renderers = {(h, w, engine): MpfRenderer(h, w, engine.endswith("_reuse"), args.use_axis, date_axis)
                  for h, w in resolutions for engine in args.engines if engine.startswith("mplfinance")}
     configurations = [(h, w, batch, engine) for h, w in resolutions for batch in args.batches for engine in args.engines]
     records = {config: [] for config in configurations}
