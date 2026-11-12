@@ -16,6 +16,7 @@ def main():
     parser.add_argument("--height", type=int, default=128)
     parser.add_argument("--width", type=int, default=128)
     parser.add_argument("--repeats", type=int, default=10)
+    parser.add_argument("--use-axis", action="store_true")
     args = parser.parse_args()
     if min(args.batch_size, args.candles, args.height, args.width, args.repeats) <= 0:
         parser.error("all arguments must be positive")
@@ -25,11 +26,11 @@ def main():
     highs = np.maximum(opens, closes) + rng.random(opens.shape)
     lows = np.minimum(opens, closes) - rng.random(opens.shape)
     data = np.stack([opens, highs, lows, closes], axis=-1)
-    render(data, args.height, args.width)  # Warm up the native thread pool.
+    render(data, args.height, args.width, use_axis=args.use_axis)  # Warm up the native thread pool.
     times = []
     for _ in range(args.repeats):
         start = perf_counter()
-        images = render(data, args.height, args.width)
+        images = render(data, args.height, args.width, use_axis=args.use_axis)
         times.append(perf_counter() - start)
         del images
     elapsed = median(times)

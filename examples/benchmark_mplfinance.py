@@ -39,13 +39,29 @@ STYLE = mpf.make_mpf_style(
     base_mpf_style="classic", marketcolors=MARKET_COLORS,
     facecolor="black", figcolor="black", gridstyle="",
     rc={"axes.grid": False, "patch.antialiased": False, "lines.antialiased": False,
+        "text.antialiased": False,
         "font.weight": "normal", "axes.labelweight": "normal", "figure.titleweight": "normal"},
 )
 
 
+def format_price(value):
+    """Match the Rust renderer's compact numeric labels (font shapes differ)."""
+    if value == 0:
+        return "0"
+    label = f"{value:.2f}".rstrip("0").rstrip(".")
+    if 0.01 <= abs(value) < 1e6 and len(label) <= 9:
+        return label
+    for precision in [2, 1]:
+        mantissa, exponent = f"{value:.{precision}e}".split("e")
+        label = f"{mantissa}e{int(exponent)}"
+        if len(label) <= 9:
+            return label
+    return label
+
+
 class MpfRenderer:
-    def __init__(self, height, width, reuse):
-        self.height, self.width, self.reuse = height, width, reuse
+    def __init__(self, height, width, reuse, use_axis=False):
+        self.height, self.width, self.reuse, self.use_axis = height, width, reuse, use_axis
         self.figure = self.axis = self.canvas = None
         if reuse:
             self.figure = Figure(figsize=(width / DPI, height / DPI), dpi=DPI, facecolor="black")
@@ -55,12 +71,14 @@ class MpfRenderer:
     def draw(self, frame, colors, out):
         candles = len(frame)
         low, high = frame["Low"].min(), frame["High"].max()
-        padding = min(int(self.height * 0.05), (self.height - 1) // 2)
-        span = self.height - 1 - 2 * padding
+        plot_height = self.height - 30 if self.use_axis else self.height
+        plot_width = self.width - 72 if self.use_axis else self.width
+        padding = min(int(plot_height * 0.05), (plot_height - 1) // 2)
+        span = plot_height - 1 - 2 * padding
         margin = (high - low) * (padding + 0.5) / max(span, 1)
         ylim = (float(low - margin), float(high + margin)) if low != high else (float(low - 1), float(high + 1))
         kwargs = dict(
-            type="candle", style=STYLE, volume=False, axisoff=True,
+            type="candle", style=STYLE, volume=False, axisoff=not self.use_axis,
             xlim=(-0.5, candles - 0.5), ylim=ylim,
             update_width_config={"candle_width": 0.7, "candle_linewidth": 72 / DPI},
             marketcolor_overrides=colors, warn_too_much_data=candles + 1,
@@ -92,6 +110,34 @@ class MpfRenderer:
             axis.grid(False)
             axis.set_xlim(-0.5, candles - 0.5)
             axis.set_ylim(*ylim)
+            if self.use_axis:
+                axis.set_axis_on()
+                axis.set_position([64 / self.width, 22 / self.height,
+                                   plot_width / self.width, plot_height / self.height])
+                axis.set_xlabel("")
+                axis.set_ylabel("")
+                axis.yaxis.tick_left()
+                axis.xaxis.tick_bottom()
+                for name, spine in axis.spines.items():
+                    spine.set_visible(name in ["left", "bottom"])
+                    spine.set_color("#c8c8c8")
+                    spine.set_linewidth(72 / DPI)
+                    spine.set_antialiased(False)
+                count = min(5, max(2, plot_width // 48 + 1), candles)
+                indices = [0] if count == 1 else [(candles - 1) * i // (count - 1) for i in range(count)]
+                axis.set_xticks(indices, [str(index) for index in indices])
+                count = 1 if low == high else min(5, max(2, plot_height // 24 + 1))
+                values = [low] if count == 1 else [high * (1 - i / (count - 1)) + low * (i / (count - 1)) for i in range(count)]
+                axis.set_yticks(values, [format_price(value) for value in values])
+                axis.tick_params(axis="both", colors="#c8c8c8", labelsize=6,
+                                 length=3 * 72 / DPI, width=72 / DPI, pad=3 * 72 / DPI,
+                                 labelrotation=0, top=False, right=False)
+                for label in [*axis.get_xticklabels(), *axis.get_yticklabels()]:
+                    label.set_fontfamily("DejaVu Sans Mono")
+                    label.set_fontweight("normal")
+                    label.set_antialiased(False)
+                for line in [*axis.get_xticklines(), *axis.get_yticklines()]:
+                    line.set_antialiased(False)
             for collection in axis.collections:
                 collection.set_antialiased(False)
                 if isinstance(collection, LineCollection):
@@ -113,13 +159,13 @@ class MpfRenderer:
             self.draw(frame, palette, out[index])
 
 
-def measure(engine, data, frames, colors, batch, height, width, renderer, passes):
+def measure(engine, data, frames, colors, batch, height, width, renderer, passes, use_axis=False):
     chunks = [(start, start + batch) for start in range(0, len(data), batch)]
     reused = engine.endswith("_reuse")
     out = np.empty((batch, height, width, 3), dtype=np.uint8) if reused else None
     if reused:
         if engine == "rust_reuse":
-            render_into(data[:batch], out)
+            render_into(data[:batch], out, use_axis=use_axis)
         else:
             renderer.batch(frames[:batch], colors[:batch], out)
     # Collect old Matplotlib cycles before timing, so they cannot be charged to
@@ -129,9 +175,9 @@ def measure(engine, data, frames, colors, batch, height, width, renderer, passes
     for _ in range(passes):
         for first, last in chunks:
             if engine == "rust":
-                images = render(data[first:last], height, width)
+                images = render(data[first:last], height, width, use_axis=use_axis)
             elif engine == "rust_reuse":
-                images = render_into(data[first:last], out)
+                images = render_into(data[first:last], out, use_axis=use_axis)
             else:
                 images = out if reused else np.empty((batch, height, width, 3), dtype=np.uint8)
                 renderer.batch(frames[first:last], colors[first:last], images)
@@ -142,22 +188,37 @@ def measure(engine, data, frames, colors, batch, height, width, renderer, passes
             "mean_batch_ms": elapsed * 1000 / (len(chunks) * passes)}
 
 
-def preview(data, frames, colors, height, width, output):
-    rust_image = render(data[:1], height, width)[0]
+def preview(data, frames, colors, height, width, output, use_axis=False):
+    rust_image = render(data[:1], height, width, use_axis=use_axis)[0]
     fresh = np.empty_like(rust_image)
     reused = np.empty_like(rust_image)
-    MpfRenderer(height, width, False).draw(frames[0], colors[0], fresh)
-    MpfRenderer(height, width, True).draw(frames[0], colors[0], reused)
+    MpfRenderer(height, width, False, use_axis).draw(frames[0], colors[0], fresh)
+    reused_renderer = MpfRenderer(height, width, True, use_axis)
+    # Verify that changing prices/labels and then reusing the canvas does not
+    # retain old artists. This check and preview saving are outside timing.
+    reused_renderer.draw(frames[-1], colors[-1], reused)
+    reused_renderer.draw(frames[0], colors[0], reused)
+    np.testing.assert_array_equal(fresh, reused)
     images = [rust_image, fresh, reused]
     labels = ["Rust", "mplfinance fresh", "mplfinance reused"]
     checks = []
     allowed = {(0, 0, 0), (0, 255, 0), (255, 0, 0)}
+    if use_axis:
+        allowed.add((200, 200, 200))
+    required = allowed.copy()
+    if use_axis:
+        # Agg covers the endpoints of tick markers by half a pixel even when
+        # antialiasing is disabled; retain those actual pixels in the comparison.
+        allowed.add((100, 100, 100))
     for label, image in zip(labels, images):
         palette = {tuple(map(int, value)) for value in np.unique(image.reshape(-1, 3), axis=0)}
         assert image.shape == (height, width, 3)
         assert image.dtype == np.uint8 and image.flags.c_contiguous
-        assert palette <= allowed and palette == allowed, (label, palette)
+        assert required <= palette <= allowed, (label, palette)
         assert not image[0].any() and not image[-1].any(), label
+        if use_axis:
+            gray = np.all(image == (200, 200, 200), axis=-1)
+            assert gray[8:height - 22, :57].any() and gray[height - 15:, 64:].any(), label
         checks.append({"engine": label, "shape": list(image.shape), "colors": [list(c) for c in sorted(palette)],
                        "matches_rust_pixels": bool(np.array_equal(image, rust_image))})
         Image.fromarray(image).save(output / f"{label.replace(' ', '_')}_{height}x{width}.png")
@@ -196,9 +257,12 @@ def main():
     parser.add_argument("--rust-passes", type=int, default=16, help="repeat the same corpus to reduce noise for the faster engines")
     parser.add_argument("--engines", choices=ENGINES, nargs="+", default=ENGINES)
     parser.add_argument("--rayon-threads", type=int)
+    parser.add_argument("--use-axis", action="store_true", help="draw matched price/index axes in both engines")
     parser.add_argument("--csv", type=Path, default=ROOT / "sample_data/BTCUSDT-1h.csv")
-    parser.add_argument("--output", type=Path, default=ROOT / "output/mplfinance_comparison")
+    parser.add_argument("--output", type=Path)
     args = parser.parse_args()
+    if args.output is None:
+        args.output = ROOT / ("output/mplfinance_axes" if args.use_axis else "output/mplfinance_comparison")
     if min(args.samples, args.candles, args.rounds, args.rust_passes, *args.batches) < 1:
         parser.error("sizes and repeat counts must be positive")
     if any(args.samples % b for b in args.batches):
@@ -223,17 +287,19 @@ def main():
         "samples": args.samples, "candles": args.candles, "csv_rows": csv_rows,
         "input_sha256": hashlib.sha256(data.tobytes()).hexdigest(),
         "rounds": args.rounds, "rust_passes": args.rust_passes,
+        "use_axis": args.use_axis,
         "scope": "real RGB batches, including canvas.draw(), RGBA-to-RGB copy, and normal figure close; automatic GC enabled",
         "excluded": "imports, CSV reading, window selection, DataFrame/DatetimeIndex/color/style preparation, preview saving, PNG encoding, disk writes, forced GC between configurations",
         "fresh": "both engines allocate independent B,H,W,3 outputs per call; mplfinance makes/closes a figure per image",
         "reuse": "both engines reuse output; mplfinance also reuses its figure, external axes, and Agg canvas; only old candle collections are removed before replotting",
         "threads": "Rust uses configured Rayon pool; mplfinance runs in one process without a multiprocessing wrapper",
         "rust_repetitions": f"Rust repeats the identical {args.samples}-window corpus more times per round for stable timing; throughput is normalized by charts actually rendered",
-        "appearance": "black, pure green/red, antialiasing disabled, no axes/grid/labels/volume, 70% candle bodies, one-pixel wicks, matching x/price limits and vertical padding",
+        "appearance": "black, pure green/red, antialiasing disabled, no grid/volume, 70% candle bodies, one-pixel wicks, matching x/price limits and vertical padding",
+        "axes": "gray left price and bottom zero-based candle-index ticks; matching tick values/counts, 64/8/8/22-pixel left/right/top/bottom margins; Rust 5x7 bitmap font vs Matplotlib 6pt DejaVu Sans Mono" if args.use_axis else "no axes or labels",
         "rasterization": "same requested appearance and exact output dimensions; Matplotlib and Rust need not produce bit-identical pixels",
     }
-    visual = {f"{h}x{w}": preview(data, frames, colors, h, w, args.output) for h, w in resolutions}
-    renderers = {(h, w, engine): MpfRenderer(h, w, engine.endswith("_reuse"))
+    visual = {f"{h}x{w}": preview(data, frames, colors, h, w, args.output, args.use_axis) for h, w in resolutions}
+    renderers = {(h, w, engine): MpfRenderer(h, w, engine.endswith("_reuse"), args.use_axis)
                  for h, w in resolutions for engine in args.engines if engine.startswith("mplfinance")}
     configurations = [(h, w, batch, engine) for h, w in resolutions for batch in args.batches for engine in args.engines]
     records = {config: [] for config in configurations}
@@ -244,7 +310,7 @@ def main():
         rng.shuffle(order)
         for h, w, batch, engine in order:
             passes = args.rust_passes if engine.startswith("rust") else 1
-            result = measure(engine, data, frames, colors, batch, h, w, renderers.get((h, w, engine)), passes)
+            result = measure(engine, data, frames, colors, batch, h, w, renderers.get((h, w, engine)), passes, args.use_axis)
             records[h, w, batch, engine].append({"round": round_index + 1, **result})
         print(f"Round {round_index + 1}/{args.rounds} complete", flush=True)
     rows, raw = [], []

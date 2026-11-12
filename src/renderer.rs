@@ -1,3 +1,4 @@
+use crate::axis::{self, Plot};
 use rayon::prelude::*;
 use std::alloc::{alloc_zeroed, Layout};
 use std::cell::RefCell;
@@ -52,18 +53,13 @@ pub fn render(
     candles: usize,
     height: usize,
     width: usize,
+    use_axis: bool,
 ) -> Result<Vec<u8>, RenderError> {
     let (sample_len, image_len, total_len) = validate(data, batch, candles, height, width)?;
+    let plot = Plot::new(height, width, use_axis)
+        .map_err(|message| RenderError::Invalid(message.into()))?;
     let mut output = zeroed_buffer(total_len)?;
-    draw_batch(
-        &mut output,
-        data,
-        sample_len,
-        image_len,
-        height,
-        width,
-        false,
-    );
+    draw_batch(&mut output, data, sample_len, image_len, plot, width, false);
     Ok(output)
 }
 
@@ -74,15 +70,18 @@ pub fn render_into(
     height: usize,
     width: usize,
     output: &mut [u8],
+    use_axis: bool,
 ) -> Result<(), RenderError> {
     // Validate everything before modifying caller-owned output.
     let (sample_len, image_len, total_len) = validate(data, batch, candles, height, width)?;
+    let plot = Plot::new(height, width, use_axis)
+        .map_err(|message| RenderError::Invalid(message.into()))?;
     if output.len() != total_len {
         return Err(RenderError::Invalid(
             "output size does not match image batch".into(),
         ));
     }
-    draw_batch(output, data, sample_len, image_len, height, width, true);
+    draw_batch(output, data, sample_len, image_len, plot, width, true);
     Ok(())
 }
 
@@ -169,7 +168,7 @@ fn draw_batch(
     data: &[f64],
     sample_len: usize,
     image_len: usize,
-    height: usize,
+    plot: Plot,
     width: usize,
     clear: bool,
 ) {
@@ -179,7 +178,7 @@ fn draw_batch(
             if clear {
                 image.fill(0);
             }
-            draw_chart(image, sample, height, width, positions);
+            draw_chart(image, sample, plot, width, positions);
         };
         let batch = output.len() / image_len;
         if batch == 1 || (batch <= 8 && image_len <= 64 * 1024) {
@@ -200,13 +199,13 @@ fn draw_batch(
             let mut cache = cache.borrow_mut();
             if cache
                 .as_ref()
-                .is_none_or(|entry| entry.candles != candles || entry.width != width)
+                .is_none_or(|entry| entry.candles != candles || entry.width != plot.width)
             {
                 *cache = Some(CandlePositions {
                     candles,
-                    width,
+                    width: plot.width,
                     coordinates: (0..candles)
-                        .map(|i| CandleX::new(i, candles, width))
+                        .map(|i| CandleX::new(i, candles, plot.width))
                         .collect(),
                 });
             }
@@ -220,7 +219,7 @@ fn draw_batch(
 fn draw_chart(
     image: &mut [u8],
     sample: &[f64],
-    height: usize,
+    plot: Plot,
     width: usize,
     positions: Option<&[CandleX]>,
 ) {
@@ -236,14 +235,14 @@ fn draw_chart(
     let scale = low.abs().max(high.abs()).max(f64::MIN_POSITIVE);
     let bottom = low / scale;
     let top = high / scale;
-    let padding = ((height as f64 * 0.05).floor() as usize).min((height - 1) / 2);
-    let span = (height - 1 - padding * 2) as f64;
+    let padding = plot.padding();
+    let span = (plot.height - 1 - padding * 2) as f64;
     let to_y = |value: f64| -> usize {
         if low == high {
-            (height - 1) / 2
+            plot.y + (plot.height - 1) / 2
         } else {
             let fraction = ((top - value / scale) / (top - bottom)).clamp(0.0, 1.0);
-            (padding as f64 + fraction * span).round() as usize
+            plot.y + (padding as f64 + fraction * span).round() as usize
         }
     };
     for (i, candle) in sample.chunks_exact(4).enumerate() {
@@ -253,20 +252,23 @@ fn draw_chart(
             center,
             left,
             right,
-        } = positions.map_or_else(|| CandleX::new(i, sample.len() / 4, width), |xs| xs[i]);
+        } = positions.map_or_else(|| CandleX::new(i, sample.len() / 4, plot.width), |xs| xs[i]);
         for y in to_y(high)..=to_y(low) {
-            let offset = (y * width + center) * 3;
+            let offset = (y * width + plot.x + center) * 3;
             image[offset..offset + 3].copy_from_slice(&color);
         }
         let open_y = to_y(open);
         let close_y = to_y(close);
         for y in open_y.min(close_y)..=open_y.max(close_y) {
-            let start = (y * width + left) * 3;
-            let end = (y * width + right + 1) * 3;
+            let start = (y * width + plot.x + left) * 3;
+            let end = (y * width + plot.x + right + 1) * 3;
             for pixel in image[start..end].chunks_exact_mut(3) {
                 pixel.copy_from_slice(&color);
             }
         }
+    }
+    if plot.x != 0 {
+        axis::draw(image, width, plot, low, high, sample.len() / 4);
     }
 }
 
@@ -277,7 +279,7 @@ mod tests {
     #[test]
     fn overflow_is_rejected_before_allocating() {
         assert!(matches!(
-            render(&[1.0; 4], 1, 1, usize::MAX, 2),
+            render(&[1.0; 4], 1, 1, usize::MAX, 2, false),
             Err(RenderError::Invalid(_))
         ));
     }
@@ -285,7 +287,7 @@ mod tests {
     #[test]
     fn shape_mismatch_is_rejected() {
         assert!(matches!(
-            render(&[1.0; 4], 2, 1, 8, 8),
+            render(&[1.0; 4], 2, 1, 8, 8, false),
             Err(RenderError::Invalid(_))
         ));
     }
@@ -293,12 +295,12 @@ mod tests {
     #[test]
     fn invalid_input_does_not_modify_reused_output() {
         let mut output = vec![123; 8 * 8 * 3];
-        assert!(render_into(&[2.0, 1.0, 0.0, 2.0], 1, 1, 8, 8, &mut output).is_err());
+        assert!(render_into(&[2.0, 1.0, 0.0, 2.0], 1, 1, 8, 8, &mut output, false).is_err());
         assert!(output.iter().all(|&pixel| pixel == 123));
     }
 
     #[test]
     fn output_size_mismatch_is_rejected() {
-        assert!(render_into(&[1.0; 4], 1, 1, 8, 8, &mut [0; 8]).is_err());
+        assert!(render_into(&[1.0; 4], 1, 1, 8, 8, &mut [0; 8], false).is_err());
     }
 }
