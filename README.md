@@ -1,4 +1,4 @@
-# candle-maker
+# Candle Maker
 
 Fast candlestick images for Python, rendered by a Rust engine. Designed for
 generating batches of model inputs: black backgrounds, green/red candles,
