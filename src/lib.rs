@@ -7,13 +7,14 @@ use pyo3::prelude::*;
 
 /// Render complete OHLC trajectories. Python's public wrapper handles coercion.
 #[pyfunction]
-#[pyo3(signature = (ohlc, height, width, use_axis=false))]
+#[pyo3(signature = (ohlc, height, width, use_axis=false, time_labels=None))]
 fn render<'py>(
     py: Python<'py>,
     ohlc: PyReadonlyArray3<'py, f64>,
     height: usize,
     width: usize,
     use_axis: bool,
+    time_labels: Option<axis::TimeLabels>,
 ) -> PyResult<Bound<'py, PyArray4<u8>>> {
     let view = ohlc.as_array();
     let (batch, candles, columns) = view.dim();
@@ -27,7 +28,19 @@ fn render<'py>(
         _ => view.iter().copied().collect(),
     };
     let pixels = py
-        .detach(|| renderer::render(&data, batch, candles, height, width, use_axis))
+        .detach(|| {
+            renderer::render(
+                &data,
+                batch,
+                candles,
+                height,
+                width,
+                renderer::RenderOptions {
+                    use_axis,
+                    time_labels: time_labels.as_deref(),
+                },
+            )
+        })
         .map_err(to_python_error)?;
     let images = Array4::from_shape_vec((batch, height, width, 3), pixels)
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
@@ -45,11 +58,12 @@ fn to_python_error(error: renderer::RenderError) -> PyErr {
 /// Fill a caller-owned RGB buffer. Keep the GIL while borrowing Python-visible
 /// mutable memory; Rayon workers operate exclusively on disjoint Rust slices.
 #[pyfunction]
-#[pyo3(signature = (ohlc, out, use_axis=false))]
+#[pyo3(signature = (ohlc, out, use_axis=false, time_labels=None))]
 fn render_into(
     ohlc: PyReadonlyArray3<'_, f64>,
     mut out: PyReadwriteArray4<'_, u8>,
     use_axis: bool,
+    time_labels: Option<axis::TimeLabels>,
 ) -> PyResult<()> {
     let view = ohlc.as_array();
     let (batch, candles, columns) = view.dim();
@@ -68,8 +82,19 @@ fn render_into(
     let pixels = out
         .as_slice_mut()
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
-    renderer::render_into(data, batch, candles, height, width, pixels, use_axis)
-        .map_err(to_python_error)
+    renderer::render_into(
+        data,
+        batch,
+        candles,
+        height,
+        width,
+        pixels,
+        renderer::RenderOptions {
+            use_axis,
+            time_labels: time_labels.as_deref(),
+        },
+    )
+    .map_err(to_python_error)
 }
 
 #[pymodule]

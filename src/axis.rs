@@ -1,6 +1,47 @@
 //! Small fixed bitmap labels: axes require no font files or plotting library.
 
 pub const AXIS_COLOR: [u8; 3] = [200, 200, 200];
+pub type TimeTicks = Vec<(usize, String)>;
+pub type TimeLabels = Vec<Option<TimeTicks>>;
+
+pub fn validate_time_labels(
+    labels: Option<&[Option<TimeTicks>]>,
+    batch: usize,
+    candles: usize,
+    use_axis: bool,
+) -> Result<(), &'static str> {
+    let Some(samples) = labels else {
+        return Ok(());
+    };
+    if !use_axis || samples.len() != batch {
+        return Err("time labels require use_axis=True and one entry per sample");
+    }
+    for ticks in samples.iter().flatten() {
+        if ticks.is_empty() || ticks.len() > 5 {
+            return Err("time labels must contain between one and five ticks per sample");
+        }
+        let mut previous = None;
+        for (index, label) in ticks {
+            if *index >= candles || previous.is_some_and(|value| *index <= value) {
+                return Err("time tick indices must increase and be within the candle sequence");
+            }
+            previous = Some(*index);
+            let lines: Vec<_> = label.split('\n').collect();
+            if lines.len() != 2
+                || lines.iter().any(|line| {
+                    line.is_empty()
+                        || line.len() > 15
+                        || !line
+                            .bytes()
+                            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'-' | b':' | b'.'))
+                })
+            {
+                return Err("time labels must contain two nonempty ASCII numeric date/time lines of at most 15 characters");
+            }
+        }
+    }
+    Ok(())
+}
 
 #[derive(Clone, Copy)]
 pub struct Plot {
@@ -35,6 +76,12 @@ impl Plot {
     pub fn padding(self) -> usize {
         ((self.height as f64 * 0.05).floor() as usize).min((self.height - 1) / 2)
     }
+
+    pub fn with_time_labels(mut self) -> Self {
+        // Two bitmap lines need ten more pixels than a one-line index label.
+        self.height -= 10;
+        self
+    }
 }
 
 pub fn format_price(value: f64) -> String {
@@ -62,7 +109,15 @@ fn scientific(value: f64) -> String {
     }
 }
 
-pub fn draw(image: &mut [u8], stride: usize, plot: Plot, low: f64, high: f64, candles: usize) {
+pub fn draw(
+    image: &mut [u8],
+    stride: usize,
+    plot: Plot,
+    low: f64,
+    high: f64,
+    candles: usize,
+    time_ticks: Option<&TimeTicks>,
+) {
     let axis_x = plot.x - 1;
     let axis_y = plot.y + plot.height;
     for y in plot.y..=axis_y {
@@ -110,6 +165,12 @@ pub fn draw(image: &mut [u8], stride: usize, plot: Plot, low: f64, high: f64, ca
         );
     }
 
+    if let Some(ticks) = time_ticks {
+        for (index, label) in ticks {
+            draw_x_label(image, stride, plot, candles, *index, label);
+        }
+        return;
+    }
     let count = (plot.width / 48 + 1).clamp(2, 5).min(candles);
     for i in 0..count {
         let index = if count == 1 {
@@ -117,17 +178,31 @@ pub fn draw(image: &mut [u8], stride: usize, plot: Plot, low: f64, high: f64, ca
         } else {
             (candles - 1) * i / (count - 1)
         };
-        let center = (((index as f64 + 0.5) * plot.width as f64 / candles as f64).floor() as usize)
-            .min(plot.width - 1)
-            + plot.x;
-        for y in axis_y + 1..=axis_y + 3 {
-            pixel(image, stride, center, y);
-        }
         let label = index.to_string();
+        draw_x_label(image, stride, plot, candles, index, &label);
+    }
+}
+
+fn draw_x_label(
+    image: &mut [u8],
+    stride: usize,
+    plot: Plot,
+    candles: usize,
+    index: usize,
+    label: &str,
+) {
+    let axis_y = plot.y + plot.height;
+    let center = (((index as f64 + 0.5) * plot.width as f64 / candles as f64).floor() as usize)
+        .min(plot.width - 1)
+        + plot.x;
+    for y in axis_y + 1..=axis_y + 3 {
+        pixel(image, stride, center, y);
+    }
+    for (row, line) in label.split('\n').enumerate() {
         let x = center
-            .saturating_sub(text_width(&label) / 2)
-            .min(stride - text_width(&label));
-        text(image, stride, x, axis_y + 7, &label);
+            .saturating_sub(text_width(line) / 2)
+            .min(stride - text_width(line));
+        text(image, stride, x, axis_y + 7 + row * 10, line);
     }
 }
 
@@ -166,6 +241,7 @@ fn glyph(byte: u8) -> [u8; 7] {
         b'9' => [14, 17, 17, 15, 1, 1, 14],
         b'.' => [0, 0, 0, 0, 0, 12, 12],
         b'-' => [0, 0, 0, 31, 0, 0, 0],
+        b':' => [0, 12, 12, 0, 12, 12, 0],
         b'e' => [0, 0, 14, 17, 31, 16, 14],
         _ => [0; 7],
     }
