@@ -1,0 +1,716 @@
+{
+  "metadata": {
+    "python": "3.12.3",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "logical_cpus": 8,
+    "rayon_threads": "default",
+    "numpy": "2.4.6",
+    "pandas": "3.1.1",
+    "matplotlib": "3.11.2",
+    "mplfinance": "0.12.10b0",
+    "backend": "Agg",
+    "native_sha256": "fffcb005a138d3203b2304cb0a74a5fd9bf110f2b469278fc8f2b0b2aa9dae46",
+    "samples": 256,
+    "candles": 64,
+    "csv_rows": 68149,
+    "input_sha256": "ce96c191c8adda363d3e1b2e4fd8a7ce4975e1a600f08807a49a0fb9299ae3f0",
+    "rounds": 5,
+    "rust_passes": 16,
+    "use_axis": false,
+    "scope": "real RGB batches, including canvas.draw(), RGBA-to-RGB copy, and normal figure close; automatic GC enabled",
+    "excluded": "imports, CSV reading, window selection, DataFrame/DatetimeIndex/color/style preparation, preview saving, PNG encoding, disk writes, forced GC between configurations",
+    "fresh": "both engines allocate independent B,H,W,3 outputs per call; mplfinance makes/closes a figure per image",
+    "reuse": "both engines reuse output; mplfinance also reuses its figure, external axes, and Agg canvas; only old candle collections are removed before replotting",
+    "threads": "Rust uses configured Rayon pool; mplfinance runs in one process without a multiprocessing wrapper",
+    "rust_repetitions": "Rust repeats the identical 256-window corpus more times per round for stable timing; throughput is normalized by charts actually rendered",
+    "appearance": "black, pure green/red, antialiasing disabled, no grid/volume, 70% candle bodies, one-pixel wicks, matching x/price limits and vertical padding",
+    "axes": "no axes or labels",
+    "rasterization": "same requested appearance and exact output dimensions; Matplotlib and Rust need not produce bit-identical pixels"
+  },
+  "visual_checks": {
+    "128x128": [
+      {
+        "engine": "Rust",
+        "shape": [
+          128,
+          128,
+          3
+        ],
+        "colors": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            255,
+            0
+          ],
+          [
+            255,
+            0,
+            0
+          ]
+        ],
+        "matches_rust_pixels": true
+      },
+      {
+        "engine": "mplfinance fresh",
+        "shape": [
+          128,
+          128,
+          3
+        ],
+        "colors": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            255,
+            0
+          ],
+          [
+            255,
+            0,
+            0
+          ]
+        ],
+        "matches_rust_pixels": false
+      },
+      {
+        "engine": "mplfinance reused",
+        "shape": [
+          128,
+          128,
+          3
+        ],
+        "colors": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            255,
+            0
+          ],
+          [
+            255,
+            0,
+            0
+          ]
+        ],
+        "matches_rust_pixels": false
+      }
+    ],
+    "256x512": [
+      {
+        "engine": "Rust",
+        "shape": [
+          256,
+          512,
+          3
+        ],
+        "colors": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            255,
+            0
+          ],
+          [
+            255,
+            0,
+            0
+          ]
+        ],
+        "matches_rust_pixels": true
+      },
+      {
+        "engine": "mplfinance fresh",
+        "shape": [
+          256,
+          512,
+          3
+        ],
+        "colors": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            255,
+            0
+          ],
+          [
+            255,
+            0,
+            0
+          ]
+        ],
+        "matches_rust_pixels": false
+      },
+      {
+        "engine": "mplfinance reused",
+        "shape": [
+          256,
+          512,
+          3
+        ],
+        "colors": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            255,
+            0
+          ],
+          [
+            255,
+            0,
+            0
+          ]
+        ],
+        "matches_rust_pixels": false
+      }
+    ]
+  },
+  "summary": [
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "mplfinance",
+      "charts_per_second": 53.45278918115442,
+      "median_mean_batch_ms": 4789.273000000094,
+      "throughput_p10": 50.314405642852364,
+      "throughput_p90": 56.568957063263625
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "mplfinance_reuse",
+      "charts_per_second": 176.97306649663872,
+      "median_mean_batch_ms": 1446.5478000001895,
+      "throughput_p10": 167.8136766117293,
+      "throughput_p90": 183.44909800308605
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust",
+      "charts_per_second": 118921.4613173751,
+      "median_mean_batch_ms": 2.1526812499956804,
+      "throughput_p10": 93541.8889963993,
+      "throughput_p90": 121796.94783135525
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "charts_per_second": 352259.2407837415,
+      "median_mean_batch_ms": 0.7267375000026277,
+      "throughput_p10": 197156.3927087626,
+      "throughput_p90": 392730.33638697164
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "mplfinance",
+      "charts_per_second": 53.247035419303174,
+      "median_mean_batch_ms": 4807.779400000072,
+      "throughput_p10": 50.357162101963716,
+      "throughput_p90": 54.468084537572274
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "mplfinance_reuse",
+      "charts_per_second": 150.36580005060597,
+      "median_mean_batch_ms": 1702.5148000000172,
+      "throughput_p10": 144.49820589360803,
+      "throughput_p90": 159.12055190248387
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust",
+      "charts_per_second": 21066.924517067746,
+      "median_mean_batch_ms": 12.151749999986805,
+      "throughput_p10": 17583.69339488708,
+      "throughput_p90": 21455.01553358698
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "charts_per_second": 39108.374882788215,
+      "median_mean_batch_ms": 6.545912500001805,
+      "throughput_p10": 33330.92318329434,
+      "throughput_p90": 41424.84253987041
+    }
+  ],
+  "rounds": [
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "mplfinance",
+      "round": 1,
+      "seconds": 4.469745300000113,
+      "charts": 256,
+      "charts_per_second": 57.273956974683436,
+      "mean_batch_ms": 4469.745300000113
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "mplfinance",
+      "round": 2,
+      "seconds": 5.118431900000132,
+      "charts": 256,
+      "charts_per_second": 50.015318168049355,
+      "mean_batch_ms": 5118.431900000132
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "mplfinance",
+      "round": 3,
+      "seconds": 4.61166060000005,
+      "charts": 256,
+      "charts_per_second": 55.51145719613391,
+      "mean_batch_ms": 4611.66060000005
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "mplfinance",
+      "round": 4,
+      "seconds": 4.789273000000094,
+      "charts": 256,
+      "charts_per_second": 53.45278918115442,
+      "mean_batch_ms": 4789.273000000094
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "mplfinance",
+      "round": 5,
+      "seconds": 5.04303949999985,
+      "charts": 256,
+      "charts_per_second": 50.76303685505688,
+      "mean_batch_ms": 5043.03949999985
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "mplfinance_reuse",
+      "round": 1,
+      "seconds": 1.4718576000000212,
+      "charts": 256,
+      "charts_per_second": 173.92986930257132,
+      "mean_batch_ms": 1471.8576000000212
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "mplfinance_reuse",
+      "round": 2,
+      "seconds": 1.4465478000001895,
+      "charts": 256,
+      "charts_per_second": 176.97306649663872,
+      "mean_batch_ms": 1446.5478000001895
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "mplfinance_reuse",
+      "round": 3,
+      "seconds": 1.413117800000009,
+      "charts": 256,
+      "charts_per_second": 181.1597023263017,
+      "mean_batch_ms": 1413.117800000009
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "mplfinance_reuse",
+      "round": 4,
+      "seconds": 1.5634903999998642,
+      "charts": 256,
+      "charts_per_second": 163.73621481783465,
+      "mean_batch_ms": 1563.4903999998642
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "mplfinance_reuse",
+      "round": 5,
+      "seconds": 1.3839680999999473,
+      "charts": 256,
+      "charts_per_second": 184.97536178760893,
+      "mean_batch_ms": 1383.9680999999473
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust",
+      "round": 1,
+      "seconds": 0.03351259999999456,
+      "charts": 4096,
+      "charts_per_second": 122222.68639260053,
+      "mean_batch_ms": 2.09453749999966
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust",
+      "round": 2,
+      "seconds": 0.03380699999979697,
+      "charts": 4096,
+      "charts_per_second": 121158.33998948734,
+      "mean_batch_ms": 2.1129374999873107
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust",
+      "round": 3,
+      "seconds": 0.0374383000000762,
+      "charts": 4096,
+      "charts_per_second": 109406.67711919782,
+      "mean_batch_ms": 2.3398937500047623
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust",
+      "round": 4,
+      "seconds": 0.04936999999995351,
+      "charts": 4096,
+      "charts_per_second": 82965.36358120028,
+      "mean_batch_ms": 3.085624999997094
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust",
+      "round": 5,
+      "seconds": 0.03444289999993089,
+      "charts": 4096,
+      "charts_per_second": 118921.4613173751,
+      "mean_batch_ms": 2.1526812499956804
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "round": 1,
+      "seconds": 0.011627800000042043,
+      "charts": 4096,
+      "charts_per_second": 352259.2407837415,
+      "mean_batch_ms": 0.7267375000026277
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "round": 2,
+      "seconds": 0.01072510000017246,
+      "charts": 4096,
+      "charts_per_second": 381907.86099282396,
+      "mean_batch_ms": 0.6703187500107788
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "round": 3,
+      "seconds": 0.010241399999813439,
+      "charts": 4096,
+      "charts_per_second": 399945.31998307013,
+      "mean_batch_ms": 0.6400874999883399
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "round": 4,
+      "seconds": 0.041252100000065184,
+      "charts": 4096,
+      "charts_per_second": 99291.91483569388,
+      "mean_batch_ms": 2.578256250004074
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "round": 5,
+      "seconds": 0.011908599999969738,
+      "charts": 4096,
+      "charts_per_second": 343953.10951836564,
+      "mean_batch_ms": 0.7442874999981086
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "mplfinance",
+      "round": 1,
+      "seconds": 5.264096699999982,
+      "charts": 256,
+      "charts_per_second": 48.631325484579506,
+      "mean_batch_ms": 5264.096699999982
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "mplfinance",
+      "round": 2,
+      "seconds": 4.835122599999977,
+      "charts": 256,
+      "charts_per_second": 52.945917028040036,
+      "mean_batch_ms": 4835.122599999977
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "mplfinance",
+      "round": 3,
+      "seconds": 4.807779400000072,
+      "charts": 256,
+      "charts_per_second": 53.247035419303174,
+      "mean_batch_ms": 4807.779400000072
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "mplfinance",
+      "round": 4,
+      "seconds": 4.698922300000049,
+      "charts": 256,
+      "charts_per_second": 54.48057738686109,
+      "mean_batch_ms": 4698.922300000049
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "mplfinance",
+      "round": 5,
+      "seconds": 4.701617599999963,
+      "charts": 256,
+      "charts_per_second": 54.44934526363905,
+      "mean_batch_ms": 4701.617599999963
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "mplfinance_reuse",
+      "round": 1,
+      "seconds": 1.7534276999999747,
+      "charts": 256,
+      "charts_per_second": 145.99974666762918,
+      "mean_batch_ms": 1753.4276999999747
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "mplfinance_reuse",
+      "round": 2,
+      "seconds": 1.6298420999999053,
+      "charts": 256,
+      "charts_per_second": 157.0704303196088,
+      "mean_batch_ms": 1629.8420999999053
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "mplfinance_reuse",
+      "round": 3,
+      "seconds": 1.5951417999999649,
+      "charts": 256,
+      "charts_per_second": 160.48729962440058,
+      "mean_batch_ms": 1595.1417999999649
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "mplfinance_reuse",
+      "round": 4,
+      "seconds": 1.7840072000001328,
+      "charts": 256,
+      "charts_per_second": 143.49717871092724,
+      "mean_batch_ms": 1784.0072000001328
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "mplfinance_reuse",
+      "round": 5,
+      "seconds": 1.7025148000000172,
+      "charts": 256,
+      "charts_per_second": 150.36580005060597,
+      "mean_batch_ms": 1702.5148000000172
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust",
+      "round": 1,
+      "seconds": 0.19411489999993137,
+      "charts": 4096,
+      "charts_per_second": 21100.904670385673,
+      "mean_batch_ms": 12.13218124999571
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust",
+      "round": 2,
+      "seconds": 0.19442799999978888,
+      "charts": 4096,
+      "charts_per_second": 21066.924517067746,
+      "mean_batch_ms": 12.151749999986805
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust",
+      "round": 3,
+      "seconds": 0.18883329999994203,
+      "charts": 4096,
+      "charts_per_second": 21691.08944238785,
+      "mean_batch_ms": 11.802081249996377
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust",
+      "round": 4,
+      "seconds": 0.24716159999979936,
+      "charts": 4096,
+      "charts_per_second": 16572.15360316216,
+      "mean_batch_ms": 15.44759999998746
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust",
+      "round": 5,
+      "seconds": 0.2144389999998566,
+      "charts": 4096,
+      "charts_per_second": 19101.003082474454,
+      "mean_batch_ms": 13.402437499991038
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "round": 1,
+      "seconds": 0.12078849999988961,
+      "charts": 4096,
+      "charts_per_second": 33910.51300416632,
+      "mean_batch_ms": 7.549281249993101
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "round": 2,
+      "seconds": 0.10473460000002888,
+      "charts": 4096,
+      "charts_per_second": 39108.374882788215,
+      "mean_batch_ms": 6.545912500001805
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "round": 3,
+      "seconds": 0.09842020000019147,
+      "charts": 4096,
+      "charts_per_second": 41617.47283577997,
+      "mean_batch_ms": 6.151262500011967
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "round": 4,
+      "seconds": 0.12433020000003125,
+      "charts": 4096,
+      "charts_per_second": 32944.529969379684,
+      "mean_batch_ms": 7.770637500001953
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "round": 5,
+      "seconds": 0.09957239999994272,
+      "charts": 4096,
+      "charts_per_second": 41135.89709600608,
+      "mean_batch_ms": 6.22327499999642
+    }
+  ]
+}

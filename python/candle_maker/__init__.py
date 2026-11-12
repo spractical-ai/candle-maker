@@ -27,13 +27,21 @@ def _prepare_ohlc(ohlc: ArrayLike) -> NDArray[np.float64]:
     return data if data.flags.aligned else data.copy()
 
 
-def render(ohlc: ArrayLike, height: int, width: int) -> NDArray[np.uint8]:
+def _prepare_axis(use_axis: bool) -> bool:
+    if not isinstance(use_axis, (bool, np.bool_)):
+        raise TypeError("use_axis must be a boolean")
+    return bool(use_axis)
+
+
+def render(ohlc: ArrayLike, height: int, width: int, *, use_axis: bool = False) -> NDArray[np.uint8]:
     """Render `(B, N, 4)` OHLC data to `(B, height, width, 3)` uint8 RGB.
 
     Columns are open, high, low, close; candles run left to right in input
     order. A single `(N, 4)` trajectory is treated as a batch of size one.
     Each chart scales independently. Rising/unchanged candles are green,
-    falling candles red, and the background black. There are no axes.
+    falling candles red, and the background black. Set use_axis=True for
+    price ticks on the left and zero-based candle indices along the bottom.
+    Axes use fixed bitmap labels and require height >= 64 and width >= 112.
 
     Values must be finite and satisfy low <= open/close <= high. At least
     one candle per chart and positive integer image dimensions are required.
@@ -45,16 +53,17 @@ def render(ohlc: ArrayLike, height: int, width: int) -> NDArray[np.uint8]:
     if height <= 0 or width <= 0:
         raise ValueError("height and width must be positive integers")
 
-    return _render(_prepare_ohlc(ohlc), height, width)
+    return _render(_prepare_ohlc(ohlc), height, width, _prepare_axis(use_axis))
 
 
-def render_into(ohlc: ArrayLike, out: NDArray[np.uint8]) -> NDArray[np.uint8]:
+def render_into(ohlc: ArrayLike, out: NDArray[np.uint8], *, use_axis: bool = False) -> NDArray[np.uint8]:
     """Render into an existing `(B, H, W, 3)` C-contiguous uint8 RGB buffer.
 
     Returns the same array. Dimensions are inferred from `out`. The whole
     buffer is cleared to black before drawing, so it can be reused for the
     next batch. Invalid OHLC leaves `out` unchanged. Values and appearance
-    follow `render()`. Input and output must not overlap.
+    follow `render()`, including optional price/index axes via use_axis=True.
+    Input and output must not overlap.
 
     Consume or copy the images before reusing this buffer. Do not access or
     modify the input/output from another thread during this call. The GIL
@@ -73,5 +82,5 @@ def render_into(ohlc: ArrayLike, out: NDArray[np.uint8]) -> NDArray[np.uint8]:
         raise ValueError("out batch size must match ohlc")
     if np.shares_memory(data, out):
         raise ValueError("ohlc and out must not overlap")
-    _render_into(data, out)
+    _render_into(data, out, _prepare_axis(use_axis))
     return out
