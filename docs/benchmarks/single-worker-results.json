@@ -1,0 +1,974 @@
+{
+  "metadata": {
+    "python": "3.12.3",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "logical_cpus": 8,
+    "rayon_threads": "1",
+    "numpy": "2.4.6",
+    "pandas": "3.1.1",
+    "matplotlib": "3.11.2",
+    "mplfinance": "0.12.10b0",
+    "backend": "Agg",
+    "native_sha256": "362ecc52d57464321095e4ecc4084ce41b90c15287801201f451bbca930dc2b0",
+    "samples": 256,
+    "candles": 64,
+    "csv_rows": 68149,
+    "input_sha256": "ce96c191c8adda363d3e1b2e4fd8a7ce4975e1a600f08807a49a0fb9299ae3f0",
+    "rounds": 5,
+    "rust_passes": 16,
+    "scope": "real RGB batches, including canvas.draw(), RGBA-to-RGB copy, and normal figure close; automatic GC enabled",
+    "excluded": "imports, CSV reading, window selection, DataFrame/DatetimeIndex/color/style preparation, preview saving, PNG encoding, disk writes, forced GC between configurations",
+    "fresh": "both engines allocate independent B,H,W,3 outputs per call; mplfinance makes/closes a figure per image",
+    "reuse": "both engines reuse output; mplfinance also reuses its figure, external axes, and Agg canvas; only old candle collections are removed before replotting",
+    "threads": "Rust uses configured Rayon pool; mplfinance runs in one process without a multiprocessing wrapper",
+    "rust_repetitions": "Rust repeats the identical 256-window corpus more times per round for stable timing; throughput is normalized by charts actually rendered",
+    "appearance": "black, pure green/red, antialiasing disabled, no axes/grid/labels/volume, 70% candle bodies, one-pixel wicks, matching x/price limits and vertical padding",
+    "rasterization": "same requested appearance and exact output dimensions; Matplotlib and Rust need not produce bit-identical pixels"
+  },
+  "visual_checks": {
+    "128x128": [
+      {
+        "engine": "Rust",
+        "shape": [
+          128,
+          128,
+          3
+        ],
+        "colors": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            255,
+            0
+          ],
+          [
+            255,
+            0,
+            0
+          ]
+        ],
+        "matches_rust_pixels": true
+      },
+      {
+        "engine": "mplfinance fresh",
+        "shape": [
+          128,
+          128,
+          3
+        ],
+        "colors": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            255,
+            0
+          ],
+          [
+            255,
+            0,
+            0
+          ]
+        ],
+        "matches_rust_pixels": false
+      },
+      {
+        "engine": "mplfinance reused",
+        "shape": [
+          128,
+          128,
+          3
+        ],
+        "colors": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            255,
+            0
+          ],
+          [
+            255,
+            0,
+            0
+          ]
+        ],
+        "matches_rust_pixels": false
+      }
+    ],
+    "256x512": [
+      {
+        "engine": "Rust",
+        "shape": [
+          256,
+          512,
+          3
+        ],
+        "colors": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            255,
+            0
+          ],
+          [
+            255,
+            0,
+            0
+          ]
+        ],
+        "matches_rust_pixels": true
+      },
+      {
+        "engine": "mplfinance fresh",
+        "shape": [
+          256,
+          512,
+          3
+        ],
+        "colors": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            255,
+            0
+          ],
+          [
+            255,
+            0,
+            0
+          ]
+        ],
+        "matches_rust_pixels": false
+      },
+      {
+        "engine": "mplfinance reused",
+        "shape": [
+          256,
+          512,
+          3
+        ],
+        "colors": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            255,
+            0
+          ],
+          [
+            255,
+            0,
+            0
+          ]
+        ],
+        "matches_rust_pixels": false
+      }
+    ]
+  },
+  "summary": [
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 1,
+      "engine": "rust",
+      "charts_per_second": 111432.13141008832,
+      "median_mean_batch_ms": 0.008974072265743871,
+      "throughput_p10": 84327.15649815743,
+      "throughput_p90": 121422.50759954537
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 1,
+      "engine": "rust_reuse",
+      "charts_per_second": 121920.00189984102,
+      "median_mean_batch_ms": 0.008202099609722069,
+      "throughput_p10": 108917.57255581373,
+      "throughput_p90": 123038.36053794503
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 32,
+      "engine": "rust",
+      "charts_per_second": 40445.97213983228,
+      "median_mean_batch_ms": 0.7911789062546859,
+      "throughput_p10": 35529.163892127515,
+      "throughput_p90": 50324.23093559009
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 32,
+      "engine": "rust_reuse",
+      "charts_per_second": 102039.79950977677,
+      "median_mean_batch_ms": 0.3136031249937332,
+      "throughput_p10": 75593.70362788791,
+      "throughput_p90": 122226.55334050486
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust",
+      "charts_per_second": 54225.87140718387,
+      "median_mean_batch_ms": 4.720993749970148,
+      "throughput_p10": 45621.90926392018,
+      "throughput_p90": 57638.481329437054
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "charts_per_second": 114536.90291635624,
+      "median_mean_batch_ms": 2.2350875000256565,
+      "throughput_p10": 104644.04698500872,
+      "throughput_p90": 140025.38874367255
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 1,
+      "engine": "rust",
+      "charts_per_second": 67626.69272991395,
+      "median_mean_batch_ms": 0.014787060547138964,
+      "throughput_p10": 60086.324064876375,
+      "throughput_p90": 70328.08805432134
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 1,
+      "engine": "rust_reuse",
+      "charts_per_second": 58612.75514360744,
+      "median_mean_batch_ms": 0.017061132812301594,
+      "throughput_p10": 45932.49532171117,
+      "throughput_p90": 66121.7723463507
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 32,
+      "engine": "rust",
+      "charts_per_second": 9666.279716565638,
+      "median_mean_batch_ms": 3.310477343745788,
+      "throughput_p10": 9173.783143365394,
+      "throughput_p90": 10975.27086967963
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 32,
+      "engine": "rust_reuse",
+      "charts_per_second": 41987.94896678774,
+      "median_mean_batch_ms": 0.7621234374965979,
+      "throughput_p10": 35470.795407257145,
+      "throughput_p90": 44484.31122761865
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust",
+      "charts_per_second": 9552.829174381925,
+      "median_mean_batch_ms": 26.798343749987907,
+      "throughput_p10": 7316.356745690815,
+      "throughput_p90": 9890.44721862479
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "charts_per_second": 31587.706397789072,
+      "median_mean_batch_ms": 8.104418750008335,
+      "throughput_p10": 30654.758547403006,
+      "throughput_p90": 40378.406975342106
+    }
+  ],
+  "rounds": [
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 1,
+      "engine": "rust",
+      "round": 1,
+      "seconds": 0.03330199999982142,
+      "charts": 4096,
+      "charts_per_second": 122995.61587958575,
+      "mean_batch_ms": 0.008130371093706401
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 1,
+      "engine": "rust",
+      "round": 2,
+      "seconds": 0.03440200000113691,
+      "charts": 4096,
+      "charts_per_second": 119062.8451794848,
+      "mean_batch_ms": 0.008398925781527566
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 1,
+      "engine": "rust",
+      "round": 3,
+      "seconds": 0.036757800000486895,
+      "charts": 4096,
+      "charts_per_second": 111432.13141008832,
+      "mean_batch_ms": 0.008974072265743871
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 1,
+      "engine": "rust",
+      "round": 4,
+      "seconds": 0.051313600000867154,
+      "charts": 4096,
+      "charts_per_second": 79822.89295490438,
+      "mean_batch_ms": 0.012527734375211708
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 1,
+      "engine": "rust",
+      "round": 5,
+      "seconds": 0.044969700000365265,
+      "charts": 4096,
+      "charts_per_second": 91083.551813037,
+      "mean_batch_ms": 0.010978930664151676
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 1,
+      "engine": "rust_reuse",
+      "round": 1,
+      "seconds": 0.03320519999942917,
+      "charts": 4096,
+      "charts_per_second": 123354.17344483438,
+      "mean_batch_ms": 0.008106738281110637
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 1,
+      "engine": "rust_reuse",
+      "round": 2,
+      "seconds": 0.034064899999066256,
+      "charts": 4096,
+      "charts_per_second": 120241.06925639807,
+      "mean_batch_ms": 0.008316625976334535
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 1,
+      "engine": "rust_reuse",
+      "round": 3,
+      "seconds": 0.040406999998594983,
+      "charts": 4096,
+      "charts_per_second": 101368.57475542417,
+      "mean_batch_ms": 0.009864990234031978
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 1,
+      "engine": "rust_reuse",
+      "round": 4,
+      "seconds": 0.033595800001421594,
+      "charts": 4096,
+      "charts_per_second": 121920.00189984102,
+      "mean_batch_ms": 0.008202099609722069
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 1,
+      "engine": "rust_reuse",
+      "round": 5,
+      "seconds": 0.033419100000173785,
+      "charts": 4096,
+      "charts_per_second": 122564.641177611,
+      "mean_batch_ms": 0.008158959960979928
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 32,
+      "engine": "rust",
+      "round": 1,
+      "seconds": 0.08183859999917331,
+      "charts": 4096,
+      "charts_per_second": 50049.73203404476,
+      "mean_batch_ms": 0.6393640624935415
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 32,
+      "engine": "rust",
+      "round": 2,
+      "seconds": 0.08109730000069248,
+      "charts": 4096,
+      "charts_per_second": 50507.23020328697,
+      "mean_batch_ms": 0.63357265625541
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 32,
+      "engine": "rust",
+      "round": 3,
+      "seconds": 0.1012709000005998,
+      "charts": 4096,
+      "charts_per_second": 40445.97213983228,
+      "mean_batch_ms": 0.7911789062546859
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 32,
+      "engine": "rust",
+      "round": 4,
+      "seconds": 0.11869769999975688,
+      "charts": 4096,
+      "charts_per_second": 34507.82955363406,
+      "mean_batch_ms": 0.9273257812481006
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 32,
+      "engine": "rust",
+      "round": 5,
+      "seconds": 0.1105200000001787,
+      "charts": 4096,
+      "charts_per_second": 37061.16539986769,
+      "mean_batch_ms": 0.8634375000013961
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 32,
+      "engine": "rust_reuse",
+      "round": 1,
+      "seconds": 0.03042520000053628,
+      "charts": 4096,
+      "charts_per_second": 134625.24486043816,
+      "mean_batch_ms": 0.23769687500418968
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 32,
+      "engine": "rust_reuse",
+      "round": 2,
+      "seconds": 0.04050619999907212,
+      "charts": 4096,
+      "charts_per_second": 101120.32232334376,
+      "mean_batch_ms": 0.31645468749275096
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 32,
+      "engine": "rust_reuse",
+      "round": 3,
+      "seconds": 0.04014119999919785,
+      "charts": 4096,
+      "charts_per_second": 102039.79950977677,
+      "mean_batch_ms": 0.3136031249937332
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 32,
+      "engine": "rust_reuse",
+      "round": 4,
+      "seconds": 0.039525799998955335,
+      "charts": 4096,
+      "charts_per_second": 103628.5160606049,
+      "mean_batch_ms": 0.30879531249183856
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 32,
+      "engine": "rust_reuse",
+      "round": 5,
+      "seconds": 0.06992629999876954,
+      "charts": 4096,
+      "charts_per_second": 58575.957830917345,
+      "mean_batch_ms": 0.546299218740387
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust",
+      "round": 1,
+      "seconds": 0.0708398999995552,
+      "charts": 4096,
+      "charts_per_second": 57820.522050789434,
+      "mean_batch_ms": 4.4274937499722
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust",
+      "round": 2,
+      "seconds": 0.0714019000006374,
+      "charts": 4096,
+      "charts_per_second": 57365.42024740848,
+      "mean_batch_ms": 4.462618750039837
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust",
+      "round": 3,
+      "seconds": 0.07553589999952237,
+      "charts": 4096,
+      "charts_per_second": 54225.87140718387,
+      "mean_batch_ms": 4.720993749970148
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust",
+      "round": 4,
+      "seconds": 0.08455949999915902,
+      "charts": 4096,
+      "charts_per_second": 48439.26466027751,
+      "mean_batch_ms": 5.2849687499474385
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust",
+      "round": 5,
+      "seconds": 0.09363639999901352,
+      "charts": 4096,
+      "charts_per_second": 43743.67233301528,
+      "mean_batch_ms": 5.852274999938345
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "round": 1,
+      "seconds": 0.0294979999998759,
+      "charts": 4096,
+      "charts_per_second": 138856.87165289957,
+      "mean_batch_ms": 1.8436249999922438
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "round": 2,
+      "seconds": 0.029089999999996508,
+      "charts": 4096,
+      "charts_per_second": 140804.4001375212,
+      "mean_batch_ms": 1.8181249999997817
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "round": 3,
+      "seconds": 0.039600599999175756,
+      "charts": 4096,
+      "charts_per_second": 103432.77627321944,
+      "mean_batch_ms": 2.4750374999484848
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "round": 4,
+      "seconds": 0.035761400000410504,
+      "charts": 4096,
+      "charts_per_second": 114536.90291635624,
+      "mean_batch_ms": 2.2350875000256565
+    },
+    {
+      "height": 128,
+      "width": 128,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "round": 5,
+      "seconds": 0.03847420000056445,
+      "charts": 4096,
+      "charts_per_second": 106460.95305269265,
+      "mean_batch_ms": 2.404637500035278
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 1,
+      "engine": "rust",
+      "round": 1,
+      "seconds": 0.057592000001022825,
+      "charts": 4096,
+      "charts_per_second": 71120.98902499054,
+      "mean_batch_ms": 0.014060546875249713
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 1,
+      "engine": "rust",
+      "round": 2,
+      "seconds": 0.060567800001081196,
+      "charts": 4096,
+      "charts_per_second": 67626.69272991395,
+      "mean_batch_ms": 0.014787060547138964
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 1,
+      "engine": "rust",
+      "round": 3,
+      "seconds": 0.06549439999980677,
+      "charts": 4096,
+      "charts_per_second": 62539.69805070486,
+      "mean_batch_ms": 0.015989843749952826
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 1,
+      "engine": "rust",
+      "round": 4,
+      "seconds": 0.07007610000073328,
+      "charts": 4096,
+      "charts_per_second": 58450.741407657384,
+      "mean_batch_ms": 0.017108422851741523
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 1,
+      "engine": "rust",
+      "round": 5,
+      "seconds": 0.05924319999940053,
+      "charts": 4096,
+      "charts_per_second": 69138.73659831756,
+      "mean_batch_ms": 0.014463671874853645
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 1,
+      "engine": "rust_reuse",
+      "round": 1,
+      "seconds": 0.06305419999989681,
+      "charts": 4096,
+      "charts_per_second": 64959.98680510899,
+      "mean_batch_ms": 0.015394091796849807
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 1,
+      "engine": "rust_reuse",
+      "round": 2,
+      "seconds": 0.06122910000158299,
+      "charts": 4096,
+      "charts_per_second": 66896.29604051185,
+      "mean_batch_ms": 0.014948510742573973
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 1,
+      "engine": "rust_reuse",
+      "round": 3,
+      "seconds": 0.06988239999918733,
+      "charts": 4096,
+      "charts_per_second": 58612.75514360744,
+      "mean_batch_ms": 0.017061132812301594
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 1,
+      "engine": "rust_reuse",
+      "round": 4,
+      "seconds": 0.09234990000004473,
+      "charts": 4096,
+      "charts_per_second": 44353.05289987338,
+      "mean_batch_ms": 0.02254636230469842
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 1,
+      "engine": "rust_reuse",
+      "round": 5,
+      "seconds": 0.08480039999994915,
+      "charts": 4096,
+      "charts_per_second": 48301.65895446786,
+      "mean_batch_ms": 0.020703222656237585
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 32,
+      "engine": "rust",
+      "round": 1,
+      "seconds": 0.3799966000005952,
+      "charts": 4096,
+      "charts_per_second": 10779.043812480386,
+      "mean_batch_ms": 2.96872343750465
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 32,
+      "engine": "rust",
+      "round": 2,
+      "seconds": 0.3688067000002775,
+      "charts": 4096,
+      "charts_per_second": 11106.088907812462,
+      "mean_batch_ms": 2.881302343752168
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 32,
+      "engine": "rust",
+      "round": 3,
+      "seconds": 0.4578635999987455,
+      "charts": 4096,
+      "charts_per_second": 8945.895677252402,
+      "mean_batch_ms": 3.577059374990199
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 32,
+      "engine": "rust",
+      "round": 4,
+      "seconds": 0.42374109999946086,
+      "charts": 4096,
+      "charts_per_second": 9666.279716565638,
+      "mean_batch_ms": 3.310477343745788
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 32,
+      "engine": "rust",
+      "round": 5,
+      "seconds": 0.4304504000010638,
+      "charts": 4096,
+      "charts_per_second": 9515.614342534882,
+      "mean_batch_ms": 3.362893750008311
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 32,
+      "engine": "rust_reuse",
+      "round": 1,
+      "seconds": 0.0939859999998589,
+      "charts": 4096,
+      "charts_per_second": 43580.95886627954,
+      "mean_batch_ms": 0.7342656249988977
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 32,
+      "engine": "rust_reuse",
+      "round": 2,
+      "seconds": 0.09084749999965425,
+      "charts": 4096,
+      "charts_per_second": 45086.54613517806,
+      "mean_batch_ms": 0.7097460937472988
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 32,
+      "engine": "rust_reuse",
+      "round": 3,
+      "seconds": 0.09755179999956454,
+      "charts": 4096,
+      "charts_per_second": 41987.94896678774,
+      "mean_batch_ms": 0.7621234374965979
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 32,
+      "engine": "rust_reuse",
+      "round": 4,
+      "seconds": 0.10901180000109889,
+      "charts": 4096,
+      "charts_per_second": 37573.91401626897,
+      "mean_batch_ms": 0.8516546875085851
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 32,
+      "engine": "rust_reuse",
+      "round": 5,
+      "seconds": 0.12022760000036214,
+      "charts": 4096,
+      "charts_per_second": 34068.71633458259,
+      "mean_batch_ms": 0.9392781250028293
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust",
+      "round": 1,
+      "seconds": 0.4287734999998065,
+      "charts": 4096,
+      "charts_per_second": 9552.829174381925,
+      "mean_batch_ms": 26.798343749987907
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust",
+      "round": 2,
+      "seconds": 0.41774310000073456,
+      "charts": 4096,
+      "charts_per_second": 9805.069192029257,
+      "mean_batch_ms": 26.10894375004591
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust",
+      "round": 3,
+      "seconds": 0.411767300000065,
+      "charts": 4096,
+      "charts_per_second": 9947.365903021811,
+      "mean_batch_ms": 25.735456250004063
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust",
+      "round": 4,
+      "seconds": 0.6169682999989163,
+      "charts": 4096,
+      "charts_per_second": 6638.914835668534,
+      "mean_batch_ms": 38.56051874993227
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust",
+      "round": 5,
+      "seconds": 0.4915679999994609,
+      "charts": 4096,
+      "charts_per_second": 8332.519610724237,
+      "mean_batch_ms": 30.722999999966305
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "round": 1,
+      "seconds": 0.09769280000000435,
+      "charts": 4096,
+      "charts_per_second": 41927.34776769442,
+      "mean_batch_ms": 6.105800000000272
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "round": 2,
+      "seconds": 0.13030200000139303,
+      "charts": 4096,
+      "charts_per_second": 31434.667157497282,
+      "mean_batch_ms": 8.143875000087064
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "round": 3,
+      "seconds": 0.12967070000013337,
+      "charts": 4096,
+      "charts_per_second": 31587.706397789072,
+      "mean_batch_ms": 8.104418750008335
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "round": 4,
+      "seconds": 0.10763369999949646,
+      "charts": 4096,
+      "charts_per_second": 38054.99578681363,
+      "mean_batch_ms": 6.727106249968529
+    },
+    {
+      "height": 256,
+      "width": 512,
+      "batch_size": 256,
+      "engine": "rust_reuse",
+      "round": 5,
+      "seconds": 0.13592250000147033,
+      "charts": 4096,
+      "charts_per_second": 30134.81947400682,
+      "mean_batch_ms": 8.495156250091895
+    }
+  ]
+}

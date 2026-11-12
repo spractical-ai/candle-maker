@@ -1,0 +1,22 @@
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[project]
+name = "candle-maker"
+version = "0.1.0"
+description = "Fast Rust candlestick charts as NumPy RGB batches"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["numpy>=2,<3"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pillow>=10", "maturin>=1.9,<2"]
+benchmark = ["mplfinance>=0.12.10b0", "matplotlib>=3.9", "pandas>=2.2", "pillow>=10", "six>=1.16"]
+
+[tool.maturin]
+python-source = "python"
+module-name = "candle_maker._native"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

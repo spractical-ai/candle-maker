@@ -218,3 +218,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local sample datasets
+/sample_data/
+
+# Local Rust toolchain and generated previews
+/.tools/
+/output/
+*.pyd
+*.pdb
